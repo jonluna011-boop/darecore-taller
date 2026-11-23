@@ -424,7 +424,8 @@
           pendingPieces: 0,
           totalWeekApprovedPieces: 0,
           quota: 0,
-          items: []
+          items: [],
+          historyItems: []
         };
       }
 
@@ -438,6 +439,7 @@
       let pendingAmount = 0;
       let pendingPieces = 0;
       const items = [];
+      const historyItems = [];
 
       state.orders.forEach(order => {
         const garment = getGarmentById(order.garmentId);
@@ -450,7 +452,25 @@
           const isCommissionMarked = !isHybrid || Boolean(order.comisionCorte);
           const sentToFinance = Boolean(order.enviadoFinanzasCorte || order.pagadoCorte);
 
-          // Solo se suma oficialmente a su pago / sueldo / comisiones cuando es APROBADO por Calidad
+          // Historial permanente de lotes de corte aprobados por Calidad (incluso ya pagados)
+          if (order.estadoCorte === 'aprobado') {
+            historyItems.push({
+              orderId: order.id,
+              stage: 'corte',
+              folio: order.folio,
+              prenda: garmentName,
+              etapa: 'Corte',
+              cantidad: order.cantidad,
+              tarifa: unitRate,
+              subtotal: isCommissionMarked ? subtotal : 0,
+              cuentaComision: isCommissionMarked,
+              pagado: Boolean(order.pagadoCorte),
+              enviadoFinanzas: Boolean(order.enviadoFinanzasCorte),
+              fecha: order.fechaAprobadoCalidad || order.fechaCorteTerminado || order.fechaCreacion
+            });
+          }
+
+          // Solo se suma oficialmente a su pago / sueldo / comisiones de la semana cuando es APROBADO y no enviado/pagado
           if (order.estadoCorte === 'aprobado' && !order.pagadoCorte && !sentToFinance) {
             approvedPieces += order.cantidad;
             if (isCommissionMarked) {
@@ -488,7 +508,25 @@
           const isCommissionMarked = !isHybrid || Boolean(order.comisionCostura);
           const sentToFinance = Boolean(order.enviadoFinanzasCostura || order.pagadoCostura);
 
-          // Solo se suma oficialmente a su pago / sueldo / comisiones cuando es APROBADO por Calidad
+          // Historial permanente de lotes de costura aprobados por Calidad (incluso ya pagados)
+          if (order.estadoCostura === 'aprobado') {
+            historyItems.push({
+              orderId: order.id,
+              stage: 'costura',
+              folio: order.folio,
+              prenda: garmentName,
+              etapa: 'Costura',
+              cantidad: order.cantidad,
+              tarifa: unitRate,
+              subtotal: isCommissionMarked ? subtotal : 0,
+              cuentaComision: isCommissionMarked,
+              pagado: Boolean(order.pagadoCostura),
+              enviadoFinanzas: Boolean(order.enviadoFinanzasCostura),
+              fecha: order.fechaAprobadoCalidad || order.fechaCosturaTerminado || order.fechaCreacion
+            });
+          }
+
+          // Solo se suma oficialmente a su pago / sueldo / comisiones de la semana cuando es APROBADO y no enviado/pagado
           if (order.estadoCostura === 'aprobado' && !order.pagadoCostura && !sentToFinance) {
             approvedPieces += order.cantidad;
             if (isCommissionMarked) {
@@ -534,7 +572,8 @@
         pendingPieces,
         totalWeekApprovedPieces: approvedPieces,
         quota,
-        items
+        items,
+        historyItems
       };
     }
 
@@ -1520,6 +1559,8 @@
 
     function renderWorkerEarningsTab(worker, earnings) {
       const isHybrid = worker.esquemaPago === 'sueldo_comision';
+      const historyList = Array.isArray(earnings.historyItems) ? earnings.historyItems : [];
+      const totalHistoryPieces = historyList.reduce((acc, h) => acc + (Number(h.cantidad) || 0), 0);
 
       return `
         <div class="max-w-3xl mx-auto">
@@ -1527,8 +1568,8 @@
             <h2 class="text-lg font-bold text-white mb-1">${isHybrid ? 'Mi Meta Semanal y Comisiones' : 'Mi Pago Acumulado (Destajo)'}</h2>
             <p class="text-xs text-zinc-400 mb-5">
               ${isHybrid
-                ? `Tu sueldo base cubre hasta ${earnings.quota} piezas semanales. Los lotes marcados por Calidad como comisión se acumulan aquí.`
-                : 'Aquí ves exactamente cuánto llevas acumulado esta semana según tus lotes aprobados por Calidad.'}
+                ? `Tu sueldo base cubre hasta ${earnings.quota} piezas semanales. Al pagar Finanzas, tu semana inicia en cero pero conservas tu historial.`
+                : 'Al pagar Finanzas, tu acumulado de la semana vuelve a cero para iniciar semana nueva, pero tu historial de lotes se conserva.'}
             </p>
 
             ${isHybrid ? `
@@ -1554,7 +1595,7 @@
                 <div class="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30">
                   <span class="text-xs font-semibold text-emerald-300">Total Aprobado Listo para Cobro</span>
                   <div class="text-3xl font-extrabold text-white font-mono-num mt-1">${formatMXN(earnings.approvedAmount)}</div>
-                  <span class="text-xs text-zinc-400 mt-1 block">${earnings.approvedPieces} piezas validadas</span>
+                  <span class="text-xs text-zinc-400 mt-1 block">${earnings.approvedPieces} piezas validadas en periodo actual</span>
                 </div>
                 <div class="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
                   <span class="text-xs font-semibold text-amber-300">Pendiente de Revisión Calidad</span>
@@ -1564,11 +1605,11 @@
               </div>
             `}
 
-            <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">Desglose de Lotes</h3>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">Desglose de la Semana Actual (Por Cobrar)</h3>
             ${earnings.items.length === 0 ? `
-              <p class="text-xs text-zinc-500 py-6 text-center bg-zinc-950 rounded-xl border border-zinc-800">Aún no tienes lotes aprobados por Calidad en este periodo.</p>
+              <p class="text-xs text-zinc-500 py-5 text-center bg-zinc-950 rounded-xl border border-zinc-800 mb-6">Semana en cero o sin lotes pendientes de cobro en este periodo.</p>
             ` : `
-              <div class="space-y-2.5">
+              <div class="space-y-2.5 mb-6">
                 ${earnings.items.map(item => `
                   <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-3">
                     <div>
@@ -1600,6 +1641,49 @@
                 `).join('')}
               </div>
             `}
+
+            <!-- Historial permanente de lotes trabajados (no se borra al pagar) -->
+            <div class="pt-5 border-t border-zinc-800">
+              <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                <div>
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-amber-300"><i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Historial de Lotes Trabajados</h3>
+                  <p class="text-[11px] text-zinc-400">Registro histórico de todo lo aprobado; se conserva aunque Finanzas ya haya pagado la semana.</p>
+                </div>
+                <span class="text-xs font-mono-num text-zinc-300 bg-zinc-950 border border-zinc-800 px-2.5 py-1 rounded-lg">
+                  ${totalHistoryPieces} pzas históricas
+                </span>
+              </div>
+
+              ${historyList.length === 0 ? `
+                <p class="text-xs text-zinc-500 py-5 text-center bg-zinc-950 rounded-xl border border-zinc-800">Aún no tienes lotes aprobados en tu historial.</p>
+              ` : `
+                <div class="space-y-2">
+                  ${historyList.map(h => `
+                    <div class="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex items-center justify-between gap-3 text-xs">
+                      <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="font-mono-num font-bold text-white">${h.folio}</span>
+                          <span class="font-semibold text-zinc-200">${h.prenda}</span>
+                          <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px]">${h.etapa}</span>
+                          <span class="text-[11px] font-mono-num text-zinc-500">${h.fecha || ''}</span>
+                        </div>
+                        <div class="text-[11px] text-zinc-400 mt-0.5">
+                          ${h.cantidad} piezas${h.cuentaComision ? ` × ${formatMXN(h.tarifa)} (${formatMXN(h.subtotal)})` : ''}
+                        </div>
+                      </div>
+                      <div class="text-right shrink-0">
+                        ${h.pagado
+                          ? `<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">✓ Pagado</span>`
+                          : h.enviadoFinanzas
+                          ? `<span class="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] font-bold">En Finanzas</span>`
+                          : `<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Por cobrar</span>`
+                        }
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              `}
+            </div>
           </div>
         </div>
       `;
