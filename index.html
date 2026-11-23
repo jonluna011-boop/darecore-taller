@@ -2090,71 +2090,33 @@
     // VISTA DE INICIO DE SESIÓN (ACCESO RÁPIDO SIN CORREO ELECTRÓNICO)
     // ============================================================================
     function renderLoginScreen() {
-      const activeUsers = state.users.filter(u => u.activo !== false);
-
       return `
         <div class="min-h-screen flex flex-col justify-center items-center p-4 bg-white">
-          <div class="w-full max-w-2xl bg-white border border-zinc-200 rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-200">
-              <div>
-                <div class="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tighter uppercase leading-none mb-2">
-                  DARE<span class="text-orange-600">CORE</span>
-                </div>
-                <h1 class="text-lg sm:text-xl font-black text-zinc-900 tracking-tight uppercase">Control de Taller & Producción</h1>
-                <p class="text-xs sm:text-sm text-zinc-500 mt-1">Corte, costura, calidad, sueldos, comisiones y finanzas en un solo flujo.</p>
+          <div class="w-full max-w-lg bg-white border border-zinc-200 rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+            <div class="pb-6 border-b border-zinc-200">
+              <div class="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tighter uppercase leading-none mb-2">
+                DARE<span class="text-orange-600">CORE</span>
               </div>
-              <button onclick="resetDemoData()" title="Restaurar datos de prueba"
-                class="self-start sm:self-center px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 text-xs font-semibold transition flex items-center gap-1.5">
-                <i class="fa-solid fa-rotate"></i> Reset Demo
-              </button>
+              <h1 class="text-lg sm:text-xl font-black text-zinc-900 tracking-tight uppercase">Control de Taller & Producción</h1>
+              <p class="text-xs sm:text-sm text-zinc-500 mt-1">Ingresa con el usuario y contraseña que te compartió administración.</p>
             </div>
 
-            <form onsubmit="handleLoginSubmit(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
+            <form onsubmit="handleLoginSubmit(event)" class="space-y-4 mt-6">
               <div>
                 <label class="block text-xs font-bold uppercase tracking-wider text-zinc-600 mb-1">Usuario</label>
-                <input id="loginUsuario" type="text" required placeholder="Ej. admin o carlos.corte"
+                <input id="loginUsuario" type="text" required autocomplete="username" placeholder="Tu usuario asignado"
                   class="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-sm text-zinc-950 focus:outline-none focus:border-orange-600" />
               </div>
               <div>
                 <label class="block text-xs font-bold uppercase tracking-wider text-zinc-600 mb-1">Contraseña</label>
-                <input id="loginPassword" type="password" required placeholder="••••••••"
+                <input id="loginPassword" type="password" required autocomplete="current-password" placeholder="••••••••"
                   class="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-sm text-zinc-950 focus:outline-none focus:border-orange-600" />
               </div>
-              <div class="flex items-end">
-                <button type="submit"
-                  class="w-full py-2.5 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-sm transition flex items-center justify-center gap-2">
-                  <i class="fa-solid fa-right-to-bracket"></i> Entrar
-                </button>
-              </div>
+              <button type="submit"
+                class="w-full py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-sm transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesión
+              </button>
             </form>
-
-            <div class="mt-7">
-              <div class="text-xs font-extrabold uppercase tracking-wider text-zinc-500 mb-3">
-                Acceso rápido de prueba (1 clic por rol)
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                ${activeUsers.map(u => {
-                  const dotColor =
-                    u.rol === 'admin' ? 'bg-orange-600' :
-                    u.rol === 'finanzas' ? 'bg-emerald-500' :
-                    u.rol === 'cortador' ? 'bg-purple-500' :
-                    'bg-sky-500';
-                  return `
-                    <button onclick="loginAs('${u.id}')"
-                      class="p-3.5 rounded-2xl bg-zinc-950 hover:bg-zinc-900 text-white border border-zinc-900 text-left transition flex flex-col justify-between gap-2 shadow-sm">
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="font-bold text-sm text-white truncate">${u.nombre}</span>
-                        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotColor}"></span>
-                      </div>
-                      <div class="flex items-center justify-between gap-2 text-[11px] font-mono-num text-zinc-400">
-                        <span class="truncate">@${u.usuario}</span>
-                        <span class="uppercase font-bold text-orange-400 text-[10px]">${u.rol}</span>
-                      </div>
-                    </button>
-                  `;
-                }).join('')}
-              </div>
-            </div>
           </div>
         </div>
       `;
