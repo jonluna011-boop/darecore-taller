@@ -133,6 +133,8 @@
     // ESTADO INICIAL REALISTA DE DARE CORE TALLER
     // ============================================================================
     const STORAGE_KEY = 'darecore_taller_state_v4';
+    const DEVICE_SESSION_KEY = 'darecore_taller_device_session_v1';
+    const RTDB_STATE_PATH = 'darecore_taller/shared_state';
 
     function formatNowStamp() {
       const now = new Date();
@@ -502,36 +504,89 @@
 
     // Cargar o inicializar estado
     let state = loadState();
+    let isRemoteApplying = false;
+
+    function loadDeviceSession() {
+      try {
+        const raw = localStorage.getItem(DEVICE_SESSION_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return {
+            currentUserId: parsed.currentUserId || null,
+            activeTab: parsed.activeTab || 'ordenes'
+          };
+        }
+      } catch (e) {
+        console.warn('No se pudo leer la sesión local del dispositivo.', e);
+      }
+      return { currentUserId: null, activeTab: 'ordenes' };
+    }
+
+    function saveDeviceSession() {
+      try {
+        localStorage.setItem(DEVICE_SESSION_KEY, JSON.stringify({
+          currentUserId: state.currentUserId,
+          activeTab: state.activeTab
+        }));
+      } catch (e) {
+        console.warn('No se pudo guardar la sesión local del dispositivo.', e);
+      }
+    }
+
+    function getSharedStatePayload(srcState = state) {
+      return {
+        users: srcState.users || [],
+        garments: srcState.garments || [],
+        orders: srcState.orders || [],
+        financeQueue: srcState.financeQueue || [],
+        payoutHistory: srcState.payoutHistory || []
+      };
+    }
 
     function loadState() {
+      const deviceSession = loadDeviceSession();
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
-          // Asegurar compatibilidad si vienen datos previos
           if (!Array.isArray(parsed.financeQueue)) parsed.financeQueue = [];
-          return parsed;
+          return {
+            ...JSON.parse(JSON.stringify(DEFAULT_STATE)),
+            ...parsed,
+            currentUserId: deviceSession.currentUserId,
+            activeTab: deviceSession.activeTab
+          };
         }
       } catch (e) {
         console.warn('No se pudo leer localStorage, usando estado inicial.', e);
       }
-      return JSON.parse(JSON.stringify(DEFAULT_STATE));
+      const base = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      base.currentUserId = deviceSession.currentUserId;
+      base.activeTab = deviceSession.activeTab;
+      return base;
     }
 
     function saveState() {
+      saveDeviceSession();
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch (e) {
         showToast('Aviso: Almacenamiento local lleno por imágenes pesadas.', 'error');
       }
+      if (!isRemoteApplying && typeof window.pushSharedStateToFirebase === 'function') {
+        window.pushSharedStateToFirebase(getSharedStatePayload(state));
+      }
     }
 
     function resetDemoData() {
       localStorage.removeItem(STORAGE_KEY);
+      const currentSession = { currentUserId: state.currentUserId, activeTab: state.activeTab };
       state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      state.currentUserId = currentSession.currentUserId;
+      state.activeTab = currentSession.activeTab;
       saveState();
       render();
-      showToast('Datos de demostración restaurados correctamente.', 'success');
+      showToast('Datos de demostración restaurados y sincronizados.', 'success');
     }
 
     // ============================================================================
@@ -1342,66 +1397,6 @@
         render();
         showToast(`Sueldo base de ${user.nombre} actualizado a ${formatMXN(val)}.`);
       }
-    }
-
-    function toggleNewEmployeeCommRateInput() {
-      const rateTypeSelect = document.getElementById('empCommRateTypeSelect');
-      const fixedWrap = document.getElementById('empFixedCommRateWrap');
-      if (!rateTypeSelect || !fixedWrap) return;
-      if (rateTypeSelect.value === 'fija') {
-        fixedWrap.classList.remove('hidden');
-      } else {
-        fixedWrap.classList.add('hidden');
-      }
-    }
-
-    function createEmployeeUser(e) {
-      if (e && e.preventDefault) e.preventDefault();
-      const nombre = document.getElementById('empNameInput').value.trim();
-      const usuario = document.getElementById('empUserInput').value.trim().toLowerCase().replace(/\s+/g, '');
-      const password = document.getElementById('empPassInput').value.trim();
-      const rol = document.getElementById('empRoleSelect').value;
-      const esquemaPago = (rol === 'admin' || rol === 'finanzas') ? 'sueldo' : document.getElementById('empPaySchemeSelect').value;
-      const metaSemanal = esquemaPago === 'sueldo_comision'
-        ? (parseInt(document.getElementById('empQuotaInput').value, 10) || 25)
-        : 0;
-      const tipoTarifaComision = esquemaPago === 'sueldo_comision'
-        ? document.getElementById('empCommRateTypeSelect').value
-        : 'prenda';
-      const tarifaComisionFija = (esquemaPago === 'sueldo_comision' && tipoTarifaComision === 'fija')
-        ? (parseFloat(document.getElementById('empFixedCommRateInput').value) || 0)
-        : 0;
-
-      if (!nombre || !usuario || !password) {
-        showToast('Completa nombre, usuario y contraseña.', 'error');
-        return;
-      }
-
-      if (state.users.some(u => u.usuario.toLowerCase() === usuario)) {
-        showToast('Ese nombre de usuario ya existe. Elige otro.', 'error');
-        return;
-      }
-
-      state.users.push({
-        id: 'u-' + Date.now(),
-        nombre,
-        usuario,
-        password,
-        rol,
-        esquemaPago,
-        metaSemanal,
-        tipoTarifaComision,
-        tarifaComisionFija,
-        activo: true
-      });
-
-      document.getElementById('empNameInput').value = '';
-      document.getElementById('empUserInput').value = '';
-      document.getElementById('empPassInput').value = '';
-
-      saveState();
-      render();
-      showToast(`Usuario "${usuario}" creado con esquema ${getPaySchemeLabel(state.users[state.users.length - 1])}.`);
     }
 
     function cycleWorkerPayScheme(userId) {
@@ -3072,31 +3067,88 @@
     // Inicializar al cargar la ventana
     window.onload = function () {
       render();
+      if (typeof window.initDarecoreRealtimeSync === 'function') {
+        window.initDarecoreRealtimeSync();
+      }
+    };
+  </script>
+
+  <!-- SINCRONIZACIÓN EN TIEMPO REAL CON FIREBASE REALTIME DATABASE -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA2DGjsW7Jm75UDOYTqFAWgnzeKapuZS4g",
+      authDomain: "darecore-taller.firebaseapp.com",
+      databaseURL: "https://darecore-taller-default-rtdb.firebaseio.com",
+      projectId: "darecore-taller",
+      storageBucket: "darecore-taller.firebasestorage.app",
+      messagingSenderId: "13434205730",
+      appId: "1:13434205730:web:3bf61c11a66c14ba2dbc7b",
+      measurementId: "G-KPZ46PQF0C"
     };
 
-    // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+    const app = initializeApp(firebaseConfig);
+    try {
+      getAnalytics(app);
+    } catch (e) {
+      // Analytics opcional en entornos sin cookies o bloqueadores
+    }
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyA2DGjsW7Jm75UDOYTqFAWgnzeKapuZS4g",
-  authDomain: "darecore-taller.firebaseapp.com",
-  databaseURL: "https://darecore-taller-default-rtdb.firebaseio.com",
-  projectId: "darecore-taller",
-  storageBucket: "darecore-taller.firebasestorage.app",
-  messagingSenderId: "13434205730",
-  appId: "1:13434205730:web:3bf61c11a66c14ba2dbc7b",
-  measurementId: "G-KPZ46PQF0C"
-};
+    const db = getDatabase(app);
+    const rtdbPath = typeof RTDB_STATE_PATH === 'string' && RTDB_STATE_PATH
+      ? RTDB_STATE_PATH
+      : 'darecore_taller/shared_state';
+    const sharedRef = ref(db, rtdbPath);
+    let syncInitialized = false;
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+    window.pushSharedStateToFirebase = async function (payload) {
+      try {
+        await set(sharedRef, payload);
+      } catch (err) {
+        console.error('Error al guardar en Firebase Realtime Database:', err);
+        showToast('No se pudo sincronizar con Firebase. Revisa reglas de Realtime Database.', 'error');
+      }
+    };
 
+    window.initDarecoreRealtimeSync = function () {
+      if (syncInitialized) return;
+      syncInitialized = true;
+
+      onValue(sharedRef, (snapshot) => {
+        try {
+          if (!snapshot.exists()) {
+            // Si aún no hay datos en la nube, subir el estado inicial una sola vez
+            set(sharedRef, getSharedStatePayload(state));
+            return;
+          }
+
+          const remoteData = snapshot.val() || {};
+          isRemoteApplying = true;
+
+          state.users = Array.isArray(remoteData.users) ? remoteData.users : state.users;
+          state.garments = Array.isArray(remoteData.garments) ? remoteData.garments : state.garments;
+          state.orders = Array.isArray(remoteData.orders) ? remoteData.orders : state.orders;
+          state.financeQueue = Array.isArray(remoteData.financeQueue) ? remoteData.financeQueue : [];
+          state.payoutHistory = Array.isArray(remoteData.payoutHistory) ? remoteData.payoutHistory : state.payoutHistory;
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          render();
+        } catch (err) {
+          console.error('Error al aplicar actualización en tiempo real:', err);
+        } finally {
+          isRemoteApplying = false;
+        }
+      }, (error) => {
+        console.error('Error en listener de Realtime Database:', error);
+      });
+    };
+
+    if (document.readyState === 'complete') {
+      window.initDarecoreRealtimeSync();
+    }
   </script>
 </body>
 </html>
