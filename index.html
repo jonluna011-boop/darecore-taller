@@ -132,9 +132,10 @@
     // ============================================================================
     // ESTADO INICIAL REALISTA DE DARE CORE TALLER
     // ============================================================================
-    const STORAGE_KEY = 'darecore_taller_state_v4';
+    const STORAGE_KEY = 'darecore_taller_state_v5_clean';
     const DEVICE_SESSION_KEY = 'darecore_taller_device_session_v1';
     const RTDB_STATE_PATH = 'darecore_taller/shared_state';
+    const CLEAN_START_FLAG_KEY = 'darecore_taller_clean_boot_done_v1';
 
     function formatNowStamp() {
       const now = new Date();
@@ -153,9 +154,9 @@
       users: [
         {
           id: 'u-admin',
-          nombre: 'Valeria Mendoza (Admin)',
+          nombre: 'Administración Dare Core',
           usuario: 'admin',
-          password: '123',
+          password: 'dare2026',
           rol: 'admin', // 'admin' | 'cortador' | 'costurero' | 'finanzas'
           esquemaPago: 'sueldo', // 'pieza' | 'sueldo' | 'sueldo_comision'
           sueldoBase: 0,
@@ -163,323 +164,18 @@
           tipoTarifaComision: 'prenda', // 'prenda' | 'fija'
           tarifaComisionFija: 0,
           activo: true
-        },
-        {
-          id: 'u-finanzas-1',
-          nombre: 'Ricardo Navarro (Finanzas)',
-          usuario: 'finanzas',
-          password: '123',
-          rol: 'finanzas',
-          esquemaPago: 'sueldo',
-          sueldoBase: 0,
-          metaSemanal: 0,
-          tipoTarifaComision: 'prenda',
-          tarifaComisionFija: 0,
-          activo: true
-        },
-        {
-          id: 'u-corte-1',
-          nombre: 'Carlos Ramírez',
-          usuario: 'carlos.corte',
-          password: '123',
-          rol: 'cortador',
-          esquemaPago: 'pieza',
-          sueldoBase: 0,
-          metaSemanal: 0,
-          tipoTarifaComision: 'prenda',
-          tarifaComisionFija: 0,
-          activo: true
-        },
-        {
-          id: 'u-corte-2',
-          nombre: 'Elena Torres',
-          usuario: 'elena.corte',
-          password: '123',
-          rol: 'cortador',
-          esquemaPago: 'sueldo_comision',
-          sueldoBase: 2200,
-          metaSemanal: 25,
-          tipoTarifaComision: 'prenda',
-          tarifaComisionFija: 12,
-          activo: true
-        },
-        {
-          id: 'u-costura-1',
-          nombre: 'María Guadalupe Hernández',
-          usuario: 'maria.costura',
-          password: '123',
-          rol: 'costurero',
-          esquemaPago: 'pieza',
-          sueldoBase: 0,
-          metaSemanal: 0,
-          tipoTarifaComision: 'prenda',
-          tarifaComisionFija: 0,
-          activo: true
-        },
-        {
-          id: 'u-costura-2',
-          nombre: 'Sofía Castro',
-          usuario: 'sofia.costura',
-          password: '123',
-          rol: 'costurero',
-          esquemaPago: 'sueldo_comision',
-          sueldoBase: 2400,
-          metaSemanal: 20,
-          tipoTarifaComision: 'prenda',
-          tarifaComisionFija: 25,
-          activo: true
         }
       ],
-      garments: [
-        {
-          id: 'g-1',
-          nombre: 'Hoodie Oversize Dare Core Heavy',
-          imagen: createGarmentSVG('Hoodie Heavy 450g', '#27272a', '#f59e0b', 'hoodie'),
-          especificaciones: 'Felpa 450g negro lavado. Capucha doble forro sin cordón, bolsa canguro reforzada con doble pespunte, etiqueta tejida en nuca.',
-          tarifaCorte: 18,
-          tarifaCostura: 55
-        },
-        {
-          id: 'g-2',
-          nombre: 'Pantalón Cargo Tactical V2',
-          imagen: createGarmentSVG('Cargo Tactical V2', '#1f2937', '#10b981', 'cargo'),
-          especificaciones: 'Gabardina strech 10oz. 6 bolsillos (2 laterales tipo fuelle con tapa y velcro), resorte en tobillo y pretina reforzada.',
-          tarifaCorte: 22,
-          tarifaCostura: 68
-        },
-        {
-          id: 'g-3',
-          nombre: 'Playera Boxy Fit Acid Wash',
-          imagen: createGarmentSVG('Boxy Fit Tee', '#292524', '#38bdf8', 'tee'),
-          especificaciones: 'Algodón peinado 260g. Cuello rib ancho de 3.2 cm con sobrecostura, caída de hombro oversize, bastilla de 2.5 cm.',
-          tarifaCorte: 10,
-          tarifaCostura: 28
-        },
-        {
-          id: 'g-4',
-          nombre: 'Chamarra Bomber Utility',
-          imagen: createGarmentSVG('Bomber Utility', '#18181b', '#f43f5e', 'jacket'),
-          especificaciones: 'Nylon repelente con forro interno capitonado. Cierre metálico YKK negro, bolsa utilitaria en manga izquierda.',
-          tarifaCorte: 26,
-          tarifaCostura: 85
-        }
-      ],
-      orders: [
-        {
-          id: 'ORD-101',
-          folio: 'DC-101',
-          garmentId: 'g-1',
-          flujo: 'secuencial', // 'secuencial' | 'solo_corte' | 'solo_costura'
-          cantidad: 15,
-          urgencia: 'urgente', // 'urgente' | 'normal'
-          notasExtra: 'Pedido prioritario tienda centro: 5 talla M, 6 talla L, 4 talla XL. Cuidar sentido del hilo en felpa.',
-          fotoExtra: null,
-          cortadorId: 'u-corte-1',
-          costureroId: 'u-costura-1',
-          tarifaCorteSnapshot: 18,
-          tarifaCosturaSnapshot: 55,
-          estadoCorte: 'aprobado',
-          estadoCostura: 'pendiente',
-          estadoGeneral: 'en_proceso',
-          comisionCorte: false,
-          comisionCostura: false,
-          pagadoCorte: false,
-          pagadoCostura: false,
-          enviadoFinanzasCorte: false,
-          enviadoFinanzasCostura: false,
-          devolucion: null,
-          fechaCreacion: '20 nov 2026, 09:15 AM',
-          fechaCorteTerminado: '20 nov 2026, 11:20 AM',
-          fechaCosturaTerminado: null,
-          fechaAprobadoCalidad: null
-        },
-        {
-          id: 'ORD-102',
-          folio: 'DC-102',
-          garmentId: 'g-2',
-          flujo: 'secuencial',
-          cantidad: 10,
-          urgencia: 'normal',
-          notasExtra: 'Lote reposición web. Todas talla 32. Entregar atadas por pares.',
-          fotoExtra: null,
-          cortadorId: 'u-corte-1',
-          costureroId: 'u-costura-2',
-          tarifaCorteSnapshot: 22,
-          tarifaCosturaSnapshot: 68,
-          estadoCorte: 'pendiente',
-          estadoCostura: 'bloqueado_corte',
-          estadoGeneral: 'en_proceso',
-          comisionCorte: false,
-          comisionCostura: false,
-          pagadoCorte: false,
-          pagadoCostura: false,
-          enviadoFinanzasCorte: false,
-          enviadoFinanzasCostura: false,
-          devolucion: null,
-          fechaCreacion: '21 nov 2026, 10:30 AM',
-          fechaCorteTerminado: null,
-          fechaCosturaTerminado: null,
-          fechaAprobadoCalidad: null
-        },
-        {
-          id: 'ORD-103',
-          folio: 'DC-103',
-          garmentId: 'g-3',
-          flujo: 'solo_costura',
-          cantidad: 20,
-          urgencia: 'urgente',
-          notasExtra: 'Corte ya estaba en almacén. Armar cuello y cerrar costados hoy antes de las 6 PM.',
-          fotoExtra: null,
-          cortadorId: null,
-          costureroId: 'u-costura-1',
-          tarifaCorteSnapshot: 0,
-          tarifaCosturaSnapshot: 28,
-          estadoCorte: 'no_aplica',
-          estadoCostura: 'en_calidad',
-          estadoGeneral: 'revision_calidad',
-          comisionCorte: false,
-          comisionCostura: false,
-          pagadoCorte: false,
-          pagadoCostura: false,
-          enviadoFinanzasCorte: false,
-          enviadoFinanzasCostura: false,
-          devolucion: null,
-          fechaCreacion: '21 nov 2026, 04:20 PM',
-          fechaCorteTerminado: null,
-          fechaCosturaTerminado: '22 nov 2026, 01:15 PM',
-          fechaAprobadoCalidad: null
-        },
-        {
-          id: 'ORD-104',
-          folio: 'DC-104',
-          garmentId: 'g-4',
-          flujo: 'solo_costura',
-          cantidad: 6,
-          urgencia: 'urgente',
-          notasExtra: 'Revisar tensión de aguja en cierre frontal.',
-          fotoExtra: null,
-          cortadorId: null,
-          costureroId: 'u-costura-1',
-          tarifaCorteSnapshot: 0,
-          tarifaCosturaSnapshot: 85,
-          estadoCorte: 'no_aplica',
-          estadoCostura: 'devuelto',
-          estadoGeneral: 'devuelto',
-          comisionCorte: false,
-          comisionCostura: false,
-          pagadoCorte: false,
-          pagadoCostura: false,
-          enviadoFinanzasCorte: false,
-          enviadoFinanzasCostura: false,
-          devolucion: {
-            etapaAfectada: 'costura',
-            motivo: 'En 2 piezas la costura del costado izquierdo quedó desviada y frunce el forro. Descoser 15 cm y volver a pasar recta.',
-            fotoEvidencia: createDefectSVG(),
-            fecha: '22 nov 2026, 11:40 AM'
-          },
-          fechaCreacion: '21 nov 2026, 01:10 PM',
-          fechaCorteTerminado: null,
-          fechaCosturaTerminado: '22 nov 2026, 10:50 AM',
-          fechaAprobadoCalidad: null
-        },
-        {
-          id: 'ORD-105',
-          folio: 'DC-105',
-          garmentId: 'g-1',
-          flujo: 'solo_corte',
-          cantidad: 12,
-          urgencia: 'normal',
-          notasExtra: 'Cortar moldes talla S y M para stock de la próxima semana.',
-          fotoExtra: null,
-          cortadorId: 'u-corte-2',
-          costureroId: null,
-          tarifaCorteSnapshot: 18,
-          tarifaCosturaSnapshot: 0,
-          estadoCorte: 'en_calidad',
-          estadoCostura: 'no_aplica',
-          estadoGeneral: 'revision_calidad',
-          comisionCorte: false,
-          comisionCostura: false,
-          pagadoCorte: false,
-          pagadoCostura: false,
-          enviadoFinanzasCorte: false,
-          enviadoFinanzasCostura: false,
-          devolucion: null,
-          fechaCreacion: '22 nov 2026, 08:45 AM',
-          fechaCorteTerminado: '22 nov 2026, 12:10 PM',
-          fechaCosturaTerminado: null,
-          fechaAprobadoCalidad: null
-        },
-        {
-          id: 'ORD-106',
-          folio: 'DC-106',
-          garmentId: 'g-3',
-          flujo: 'solo_corte',
-          cantidad: 20,
-          urgencia: 'normal',
-          notasExtra: 'Lote base semanal cubierto por sueldo fijo de Elena.',
-          fotoExtra: null,
-          cortadorId: 'u-corte-2',
-          costureroId: null,
-          tarifaCorteSnapshot: 10,
-          tarifaCosturaSnapshot: 0,
-          estadoCorte: 'aprobado',
-          estadoCostura: 'no_aplica',
-          estadoGeneral: 'completado',
-          comisionCorte: false,
-          comisionCostura: false,
-          pagadoCorte: false,
-          pagadoCostura: false,
-          enviadoFinanzasCorte: false,
-          enviadoFinanzasCostura: false,
-          devolucion: null,
-          fechaCreacion: '21 nov 2026, 11:00 AM',
-          fechaCorteTerminado: '21 nov 2026, 02:30 PM',
-          fechaCosturaTerminado: null,
-          fechaAprobadoCalidad: '21 nov 2026, 04:00 PM'
-        }
-      ],
+      garments: [],
+      orders: [],
       financeQueue: [],
-      payoutHistory: [
-        {
-          id: 'PAY-01',
-          workerId: 'u-corte-1',
-          workerName: 'Carlos Ramírez',
-          rol: 'Cortador',
-          piezas: 42,
-          sueldoBase: 0,
-          comisiones: 756,
-          monto: 756,
-          concepto: 'Destajo por pieza',
-          fecha: '14 nov 2026, 05:30 PM (Pagado por Finanzas)',
-          fechaISO: '2026-11-14',
-          mesClave: '2026-11',
-          enviadoPor: 'Valeria Mendoza (Admin)',
-          pagadoPor: 'Ricardo Navarro (Finanzas)'
-        },
-        {
-          id: 'PAY-02',
-          workerId: 'u-corte-2',
-          workerName: 'Elena Torres',
-          rol: 'Cortadora',
-          piezas: 33,
-          sueldoBase: 2200,
-          comisiones: 144,
-          monto: 2344,
-          concepto: 'Sueldo base ($2,200.00) + Comisiones excedente (8 pzas sobre meta de 25)',
-          fecha: '14 nov 2026, 05:32 PM (Pagado por Finanzas)',
-          fechaISO: '2026-11-14',
-          mesClave: '2026-11',
-          enviadoPor: 'Valeria Mendoza (Admin)',
-          pagadoPor: 'Ricardo Navarro (Finanzas)'
-        }
-      ]
+      payoutHistory: []
     };
 
     // Filtros interactivos de Finanzas (no se persisten como datos de negocio)
     let financeFilters = {
       workerId: 'todos',
-      monthKey: '2026-11'
+      monthKey: getCurrentMonthKey()
     };
 
     function getTodayISO() {
@@ -549,16 +245,23 @@
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (!Array.isArray(parsed.financeQueue)) parsed.financeQueue = [];
+          const cleanUsers = Array.isArray(parsed.users) && parsed.users.length > 0
+            ? parsed.users
+            : JSON.parse(JSON.stringify(DEFAULT_STATE.users));
           return {
             ...JSON.parse(JSON.stringify(DEFAULT_STATE)),
             ...parsed,
+            users: cleanUsers,
+            garments: Array.isArray(parsed.garments) ? parsed.garments : [],
+            orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+            financeQueue: Array.isArray(parsed.financeQueue) ? parsed.financeQueue : [],
+            payoutHistory: Array.isArray(parsed.payoutHistory) ? parsed.payoutHistory : [],
             currentUserId: deviceSession.currentUserId,
             activeTab: deviceSession.activeTab
           };
         }
       } catch (e) {
-        console.warn('No se pudo leer localStorage, usando estado inicial.', e);
+        console.warn('No se pudo leer localStorage, usando estado limpio inicial.', e);
       }
       const base = JSON.parse(JSON.stringify(DEFAULT_STATE));
       base.currentUserId = deviceSession.currentUserId;
@@ -3081,20 +2784,22 @@
 
       onValue(sharedRef, (snapshot) => {
         try {
-          if (!snapshot.exists()) {
-            // Si aún no hay datos en la nube, subir el estado inicial una sola vez
-            set(sharedRef, getSharedStatePayload(state));
+          const cleanBootDone = localStorage.getItem(CLEAN_START_FLAG_KEY) === '1';
+          if (!snapshot.exists() || !cleanBootDone) {
+            // Subir estado limpio inicial (solo admin, sin prendas/órdenes de prueba)
+            localStorage.setItem(CLEAN_START_FLAG_KEY, '1');
+            set(sharedRef, getSharedStatePayload(DEFAULT_STATE));
             return;
           }
 
           const remoteData = snapshot.val() || {};
           isRemoteApplying = true;
 
-          state.users = Array.isArray(remoteData.users) ? remoteData.users : state.users;
-          state.garments = Array.isArray(remoteData.garments) ? remoteData.garments : state.garments;
-          state.orders = Array.isArray(remoteData.orders) ? remoteData.orders : state.orders;
+          state.users = Array.isArray(remoteData.users) && remoteData.users.length > 0 ? remoteData.users : DEFAULT_STATE.users;
+          state.garments = Array.isArray(remoteData.garments) ? remoteData.garments : [];
+          state.orders = Array.isArray(remoteData.orders) ? remoteData.orders : [];
           state.financeQueue = Array.isArray(remoteData.financeQueue) ? remoteData.financeQueue : [];
-          state.payoutHistory = Array.isArray(remoteData.payoutHistory) ? remoteData.payoutHistory : state.payoutHistory;
+          state.payoutHistory = Array.isArray(remoteData.payoutHistory) ? remoteData.payoutHistory : [];
 
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           render();
