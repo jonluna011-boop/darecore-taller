@@ -174,7 +174,14 @@
     // Filtros interactivos de Finanzas (no se persisten como datos de negocio)
     let financeFilters = {
       workerId: 'todos',
-      monthKey: getCurrentMonthKey()
+      monthKey: getCurrentMonthKey(),
+      weekKey: 'todas'
+    };
+
+    // Filtro interactivo de calendario para el historial del trabajador
+    let workerHistoryFilters = {
+      monthKey: 'todos',
+      weekKey: 'todas'
     };
 
     function getTodayISO() {
@@ -187,6 +194,93 @@
 
     function getCurrentMonthKey() {
       return getTodayISO().slice(0, 7);
+    }
+
+    function getCurrentWeekKey() {
+      return getISOWeekKeyFromDate(new Date());
+    }
+
+    function parseDateSafe(dateInput) {
+      if (!dateInput) return null;
+      if (dateInput instanceof Date && !isNaN(dateInput)) return dateInput;
+      const str = String(dateInput).trim();
+
+      // Formato ISO YYYY-MM-DD
+      const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        const dt = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+        return isNaN(dt) ? null : dt;
+      }
+
+      // Formato en español de México ej. "22 nov 2026, 11:21 p.m." o "22 nov 2026"
+      const monthsEs = {
+        ene: 0, enero: 0,
+        feb: 1, febrero: 1,
+        mar: 2, marzo: 2,
+        abr: 3, abril: 3,
+        may: 4, mayo: 4,
+        jun: 5, junio: 5,
+        jul: 6, julio: 6,
+        ago: 7, agosto: 7,
+        sep: 8, sept: 8, septiembre: 8,
+        oct: 9, octubre: 9,
+        nov: 10, noviembre: 10,
+        dic: 11, diciembre: 11
+      };
+      const esMatch = str.toLowerCase().match(/(\d{1,2})\s+([a-záéíóú]+)\s+(\d{4})/);
+      if (esMatch) {
+        const day = Number(esMatch[1]);
+        const monKey = esMatch[2].replace('.', '');
+        const year = Number(esMatch[3]);
+        if (monKey in monthsEs) {
+          const dt = new Date(year, monthsEs[monKey], day);
+          return isNaN(dt) ? null : dt;
+        }
+      }
+
+      const fallback = new Date(str);
+      return isNaN(fallback) ? null : fallback;
+    }
+
+    function getISOWeekKeyFromDate(dateInput) {
+      const dt = parseDateSafe(dateInput);
+      if (!dt) return null;
+      const utcDate = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
+      const dayNum = utcDate.getUTCDay() || 7;
+      utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+      return `${utcDate.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+    }
+
+    function getMonthKeyFromDate(dateInput) {
+      const dt = parseDateSafe(dateInput);
+      if (!dt) return null;
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function getWeekRangeLabel(weekKey) {
+      if (!weekKey || !/^(\d{4})-W(\d{2})$/.test(weekKey)) return 'Todas las semanas';
+      const [, yearStr, weekStr] = weekKey.match(/^(\d{4})-W(\d{2})$/);
+      const year = Number(yearStr);
+      const week = Number(weekStr);
+
+      // Lunes de la semana ISO
+      const jan4 = new Date(Date.UTC(year, 0, 4));
+      const jan4Day = jan4.getUTCDay() || 7;
+      const week1Monday = new Date(jan4);
+      week1Monday.setUTCDate(jan4.getUTCDate() - jan4Day + 1);
+
+      const monday = new Date(week1Monday);
+      monday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+
+      const fmtOpts = { day: '2-digit', month: 'short', timeZone: 'UTC' };
+      const startTxt = monday.toLocaleDateString('es-MX', fmtOpts);
+      const endTxt = sunday.toLocaleDateString('es-MX', fmtOpts);
+      return `Sem ${week} (${startTxt} – ${endTxt})`;
     }
 
     function formatMonthLabel(monthKey) {
@@ -454,6 +548,7 @@
 
           // Historial permanente de lotes de corte aprobados por Calidad (incluso ya pagados)
           if (order.estadoCorte === 'aprobado') {
+            const fechaRef = order.fechaAprobadoCalidad || order.fechaCorteTerminado || order.fechaCreacion;
             historyItems.push({
               orderId: order.id,
               stage: 'corte',
@@ -466,7 +561,9 @@
               cuentaComision: isCommissionMarked,
               pagado: Boolean(order.pagadoCorte),
               enviadoFinanzas: Boolean(order.enviadoFinanzasCorte),
-              fecha: order.fechaAprobadoCalidad || order.fechaCorteTerminado || order.fechaCreacion
+              fecha: fechaRef,
+              mesClave: getMonthKeyFromDate(fechaRef),
+              semanaClave: getISOWeekKeyFromDate(fechaRef)
             });
           }
 
@@ -510,6 +607,7 @@
 
           // Historial permanente de lotes de costura aprobados por Calidad (incluso ya pagados)
           if (order.estadoCostura === 'aprobado') {
+            const fechaRef = order.fechaAprobadoCalidad || order.fechaCosturaTerminado || order.fechaCreacion;
             historyItems.push({
               orderId: order.id,
               stage: 'costura',
@@ -522,7 +620,9 @@
               cuentaComision: isCommissionMarked,
               pagado: Boolean(order.pagadoCostura),
               enviadoFinanzas: Boolean(order.enviadoFinanzasCostura),
-              fecha: order.fechaAprobadoCalidad || order.fechaCosturaTerminado || order.fechaCreacion
+              fecha: fechaRef,
+              mesClave: getMonthKeyFromDate(fechaRef),
+              semanaClave: getISOWeekKeyFromDate(fechaRef)
             });
           }
 
@@ -1277,6 +1377,7 @@
         fecha: `${formatNowStamp()} (Pagado por Finanzas)`,
         fechaISO: getTodayISO(),
         mesClave: getTodayISO().slice(0, 7),
+        semanaClave: getCurrentWeekKey(),
         enviadoPor: item.enviadoPor,
         pagadoPor: financeUser ? financeUser.nombre : 'Finanzas'
       });
@@ -1557,10 +1658,36 @@
       `;
     }
 
+    function setWorkerHistoryFilter(key, value) {
+      workerHistoryFilters[key] = value;
+      render();
+    }
+
     function renderWorkerEarningsTab(worker, earnings) {
       const isHybrid = worker.esquemaPago === 'sueldo_comision';
-      const historyList = Array.isArray(earnings.historyItems) ? earnings.historyItems : [];
-      const totalHistoryPieces = historyList.reduce((acc, h) => acc + (Number(h.cantidad) || 0), 0);
+      const allHistoryList = Array.isArray(earnings.historyItems) ? earnings.historyItems : [];
+
+      // Meses y semanas disponibles en el historial del trabajador
+      const workerMonthSet = new Set();
+      const workerWeekSet = new Set();
+      allHistoryList.forEach(h => {
+        const mKey = h.mesClave || getMonthKeyFromDate(h.fecha);
+        const wKey = h.semanaClave || getISOWeekKeyFromDate(h.fecha);
+        if (mKey) workerMonthSet.add(mKey);
+        if (wKey) workerWeekSet.add(wKey);
+      });
+      const workerMonths = Array.from(workerMonthSet).sort().reverse();
+      const workerWeeks = Array.from(workerWeekSet).sort().reverse();
+
+      const filteredHistoryList = allHistoryList.filter(h => {
+        const mKey = h.mesClave || getMonthKeyFromDate(h.fecha);
+        const wKey = h.semanaClave || getISOWeekKeyFromDate(h.fecha);
+        const matchesMonth = workerHistoryFilters.monthKey === 'todos' || mKey === workerHistoryFilters.monthKey;
+        const matchesWeek = workerHistoryFilters.weekKey === 'todas' || wKey === workerHistoryFilters.weekKey;
+        return matchesMonth && matchesWeek;
+      });
+
+      const totalHistoryPieces = filteredHistoryList.reduce((acc, h) => acc + (Number(h.cantidad) || 0), 0);
 
       return `
         <div class="max-w-3xl mx-auto">
@@ -1647,18 +1774,44 @@
               <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
                 <div>
                   <h3 class="text-xs font-bold uppercase tracking-wider text-amber-300"><i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Historial de Lotes Trabajados</h3>
-                  <p class="text-[11px] text-zinc-400">Registro histórico de todo lo aprobado; se conserva aunque Finanzas ya haya pagado la semana.</p>
+                  <p class="text-[11px] text-zinc-400">Filtra por mes o semana para consultar lo trabajado; se conserva aunque Finanzas ya haya pagado.</p>
                 </div>
                 <span class="text-xs font-mono-num text-zinc-300 bg-zinc-950 border border-zinc-800 px-2.5 py-1 rounded-lg">
-                  ${totalHistoryPieces} pzas históricas
+                  ${totalHistoryPieces} pzas (${filteredHistoryList.length} lotes)
                 </span>
               </div>
 
-              ${historyList.length === 0 ? `
-                <p class="text-xs text-zinc-500 py-5 text-center bg-zinc-950 rounded-xl border border-zinc-800">Aún no tienes lotes aprobados en tu historial.</p>
+              <!-- Calendario de Mes y Semana para el trabajador -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800">
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Mes</label>
+                  <select onchange="setWorkerHistoryFilter('monthKey', this.value)"
+                    class="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-white focus:outline-none focus:border-amber-500">
+                    <option value="todos" ${workerHistoryFilters.monthKey === 'todos' ? 'selected' : ''}>Todos los meses</option>
+                    ${workerMonths.map(m => `<option value="${m}" ${workerHistoryFilters.monthKey === m ? 'selected' : ''}>${formatMonthLabel(m)}</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Semana (Calendario)</label>
+                  <select onchange="setWorkerHistoryFilter('weekKey', this.value)"
+                    class="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-white focus:outline-none focus:border-amber-500">
+                    <option value="todas" ${workerHistoryFilters.weekKey === 'todas' ? 'selected' : ''}>Todas las semanas</option>
+                    ${workerWeeks.map(w => `<option value="${w}" ${workerHistoryFilters.weekKey === w ? 'selected' : ''}>${getWeekRangeLabel(w)}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="flex items-end">
+                  <button type="button" onclick="setWorkerHistoryFilter('monthKey', 'todos'); setWorkerHistoryFilter('weekKey', 'todas');"
+                    class="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition">
+                    Limpiar filtros
+                  </button>
+                </div>
+              </div>
+
+              ${filteredHistoryList.length === 0 ? `
+                <p class="text-xs text-zinc-500 py-5 text-center bg-zinc-950 rounded-xl border border-zinc-800">No hay lotes aprobados en el mes o semana seleccionados.</p>
               ` : `
                 <div class="space-y-2">
-                  ${historyList.map(h => `
+                  ${filteredHistoryList.map(h => `
                     <div class="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex items-center justify-between gap-3 text-xs">
                       <div>
                         <div class="flex items-center gap-2 flex-wrap">
@@ -2523,31 +2676,42 @@
       const totalQueueToPay = state.financeQueue.reduce((acc, item) => acc + (Number(item.monto) || 0), 0);
       const workersForFilter = state.users.filter(u => u.rol === 'cortador' || u.rol === 'costurero');
 
-      // Meses disponibles en el historial + mes actual
-      const monthSet = new Set([getCurrentMonthKey(), '2026-11']);
+      // Meses y semanas disponibles en el historial
+      const monthSet = new Set([getCurrentMonthKey()]);
+      const weekSet = new Set([getCurrentWeekKey()]);
       state.payoutHistory.forEach(p => {
-        if (p.mesClave) monthSet.add(p.mesClave);
-        else if (p.fechaISO && p.fechaISO.length >= 7) monthSet.add(p.fechaISO.slice(0, 7));
+        const mKey = p.mesClave || (p.fechaISO ? p.fechaISO.slice(0, 7) : getMonthKeyFromDate(p.fecha));
+        const wKey = p.semanaClave || getISOWeekKeyFromDate(p.fechaISO || p.fecha);
+        if (mKey) monthSet.add(mKey);
+        if (wKey) weekSet.add(wKey);
       });
       const availableMonths = Array.from(monthSet).sort().reverse();
+      const availableWeeks = Array.from(weekSet).sort().reverse();
 
       const filteredHistory = state.payoutHistory.filter(p => {
-        const pMonth = p.mesClave || (p.fechaISO ? p.fechaISO.slice(0, 7) : '2026-11');
+        const pMonth = p.mesClave || (p.fechaISO ? p.fechaISO.slice(0, 7) : getMonthKeyFromDate(p.fecha));
+        const pWeek = p.semanaClave || getISOWeekKeyFromDate(p.fechaISO || p.fecha);
         const matchesMonth = financeFilters.monthKey === 'todos' || pMonth === financeFilters.monthKey;
+        const matchesWeek = financeFilters.weekKey === 'todas' || pWeek === financeFilters.weekKey;
         const matchesWorker = financeFilters.workerId === 'todos' ||
           p.workerId === financeFilters.workerId ||
           (p.workerName && workersForFilter.some(w => w.id === financeFilters.workerId && w.nombre === p.workerName));
-        return matchesMonth && matchesWorker;
+        return matchesMonth && matchesWeek && matchesWorker;
       });
 
       const filteredTotalPaid = filteredHistory.reduce((acc, p) => acc + (Number(p.monto) || 0), 0);
       const filteredTotalPieces = filteredHistory.reduce((acc, p) => acc + (Number(p.piezas) || 0), 0);
       const selectedWorkerObj = workersForFilter.find(w => w.id === financeFilters.workerId);
 
+      const filterSummaryLabel = [
+        financeFilters.monthKey === 'todos' ? 'Todos los meses' : formatMonthLabel(financeFilters.monthKey),
+        financeFilters.weekKey === 'todas' ? 'Todas las semanas' : getWeekRangeLabel(financeFilters.weekKey)
+      ].join(' • ');
+
       // Resumen agrupado por mes para vista de calendario mensual
       const monthSummaryMap = {};
       state.payoutHistory.forEach(p => {
-        const mKey = p.mesClave || (p.fechaISO ? p.fechaISO.slice(0, 7) : '2026-11');
+        const mKey = p.mesClave || (p.fechaISO ? p.fechaISO.slice(0, 7) : getMonthKeyFromDate(p.fecha) || getCurrentMonthKey());
         if (!monthSummaryMap[mKey]) {
           monthSummaryMap[mKey] = { monthKey: mKey, total: 0, count: 0 };
         }
@@ -2564,7 +2728,7 @@
             <p class="text-xs text-zinc-400 mt-0.5">${state.financeQueue.length} ${state.financeQueue.length === 1 ? 'corte pendiente' : 'cortes pendientes'} de confirmar pago</p>
           </div>
           <div class="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3 text-right">
-            <span class="text-[10px] uppercase tracking-wider text-zinc-400 block">Suma pagada (${financeFilters.monthKey === 'todos' ? 'Todos los meses' : formatMonthLabel(financeFilters.monthKey)})</span>
+            <span class="text-[10px] uppercase tracking-wider text-zinc-400 block">Suma pagada (${filterSummaryLabel})</span>
             <span class="text-xl font-extrabold text-emerald-400 font-mono-num">${formatMXN(filteredTotalPaid)}</span>
             <span class="text-[11px] text-zinc-400 block">${selectedWorkerObj ? selectedWorkerObj.nombre : 'Todos los empleados'} • ${filteredTotalPieces} pzas</span>
           </div>
@@ -2600,14 +2764,14 @@
           </div>
         `}
 
-        <!-- Filtros de Calendario / Mes y Empleado para Aclaraciones -->
+        <!-- Filtros de Calendario / Mes / Semana y Empleado para Aclaraciones -->
         <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 mb-4">
           <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
             <div>
-              <h3 class="text-base font-bold text-white"><i class="fa-solid fa-calendar-days text-emerald-400 mr-2"></i>Control Mensual y Consulta por Empleado</h3>
-              <p class="text-xs text-zinc-400">Filtra por mes o empleado para revisar fechas, piezas y sumas pagadas ante cualquier aclaración.</p>
+              <h3 class="text-base font-bold text-white"><i class="fa-solid fa-calendar-days text-emerald-400 mr-2"></i>Calendario Mensual y Semanal por Empleado</h3>
+              <p class="text-xs text-zinc-400">Busca por mes, semana o empleado para revisar fechas, piezas y sumas pagadas ante cualquier aclaración.</p>
             </div>
-            <div class="flex flex-col sm:flex-row gap-2.5">
+            <div class="flex flex-col sm:flex-row gap-2.5 flex-wrap">
               <div>
                 <label class="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Empleado</label>
                 <select onchange="setFinanceFilter('workerId', this.value)"
@@ -2624,21 +2788,31 @@
                   onchange="setFinanceFilter('monthKey', this.value || 'todos')"
                   class="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-white font-mono-num focus:outline-none focus:border-emerald-500" />
               </div>
-              <div class="flex items-end">
-                <button onclick="setFinanceFilter('monthKey', 'todos')"
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Semana</label>
+                <select onchange="setFinanceFilter('weekKey', this.value)"
+                  class="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-white font-semibold focus:outline-none focus:border-emerald-500">
+                  <option value="todas" ${financeFilters.weekKey === 'todas' ? 'selected' : ''}>Todas las semanas</option>
+                  ${availableWeeks.map(wKey => `
+                    <option value="${wKey}" ${financeFilters.weekKey === wKey ? 'selected' : ''}>${getWeekRangeLabel(wKey)}</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div class="flex items-end gap-1.5">
+                <button onclick="setFinanceFilter('monthKey', 'todos'); setFinanceFilter('weekKey', 'todas');"
                   class="px-3 py-2 rounded-xl border text-xs font-bold transition ${
-                    financeFilters.monthKey === 'todos'
+                    financeFilters.monthKey === 'todos' && financeFilters.weekKey === 'todas'
                       ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                       : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
                   }">
-                  Todos los meses
+                  Ver todo
                 </button>
               </div>
             </div>
           </div>
 
           <!-- Atajos de meses registrados -->
-          <div class="flex items-center gap-2 flex-wrap mb-4">
+          <div class="flex items-center gap-2 flex-wrap mb-2.5">
             ${availableMonths.map(mKey => {
               const active = financeFilters.monthKey === mKey;
               return `
@@ -2654,26 +2828,55 @@
             }).join('')}
           </div>
 
+          <!-- Atajos de semanas registradas -->
+          <div class="flex items-center gap-2 flex-wrap mb-4">
+            <button onclick="setFinanceFilter('weekKey', 'todas')"
+              class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
+                financeFilters.weekKey === 'todas'
+                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-bold'
+                  : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+              }">
+              Todas las semanas
+            </button>
+            ${availableWeeks.map(wKey => {
+              const active = financeFilters.weekKey === wKey;
+              return `
+                <button onclick="setFinanceFilter('weekKey', '${wKey}')"
+                  class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
+                    active
+                      ? 'bg-sky-500 text-zinc-950 border-sky-400 font-bold'
+                      : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-zinc-700'
+                  }">
+                  <i class="fa-solid fa-calendar-week mr-1"></i>${getWeekRangeLabel(wKey)}
+                </button>
+              `;
+            }).join('')}
+          </div>
+
           <!-- Lista filtrada con fechas -->
           ${filteredHistory.length === 0 ? `
             <div class="p-6 rounded-xl bg-zinc-950 border border-zinc-800 text-center text-xs text-zinc-500">
-              No hay pagos registrados para el filtro seleccionado.
+              No hay pagos registrados para el mes, semana o empleado seleccionado.
             </div>
           ` : `
             <div class="divide-y divide-zinc-800 rounded-xl bg-zinc-950 border border-zinc-800 overflow-hidden">
-              ${filteredHistory.map(p => `
-                <div class="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                  <div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <strong class="text-white text-sm">${p.workerName}</strong>
-                      <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] font-semibold">${p.rol}</span>
-                      <span class="text-[11px] text-emerald-300 font-mono-num"><i class="fa-regular fa-clock mr-1"></i>${p.fecha}</span>
+              ${filteredHistory.map(p => {
+                const wKey = p.semanaClave || getISOWeekKeyFromDate(p.fechaISO || p.fecha);
+                return `
+                  <div class="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <strong class="text-white text-sm">${p.workerName}</strong>
+                        <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] font-semibold">${p.rol}</span>
+                        ${wKey ? `<span class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 text-[10px] font-semibold">${getWeekRangeLabel(wKey)}</span>` : ''}
+                        <span class="text-[11px] text-emerald-300 font-mono-num"><i class="fa-regular fa-clock mr-1"></i>${p.fecha}</span>
+                      </div>
+                      <div class="text-zinc-400 mt-1">${p.concepto} • <strong>${p.piezas} piezas</strong></div>
                     </div>
-                    <div class="text-zinc-400 mt-1">${p.concepto} • <strong>${p.piezas} piezas</strong></div>
+                    <div class="font-mono-num font-bold text-emerald-400 text-sm sm:text-base">${formatMXN(p.monto)}</div>
                   </div>
-                  <div class="font-mono-num font-bold text-emerald-400 text-sm sm:text-base">${formatMXN(p.monto)}</div>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           `}
 
@@ -2681,7 +2884,7 @@
           <div class="mt-4 p-4 rounded-xl bg-emerald-950/35 border border-emerald-500/35 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div class="text-xs text-emerald-200">
               <strong>Suma total pagada</strong> ${selectedWorkerObj ? `a <strong>${selectedWorkerObj.nombre}</strong>` : 'del equipo'}
-              ${financeFilters.monthKey !== 'todos' ? `en <strong>${formatMonthLabel(financeFilters.monthKey)}</strong>` : '(histórico completo)'}
+              (${filterSummaryLabel})
               • <strong>${filteredTotalPieces} piezas</strong>
             </div>
             <div class="font-mono-num font-extrabold text-xl text-emerald-400">${formatMXN(filteredTotalPaid)}</div>
