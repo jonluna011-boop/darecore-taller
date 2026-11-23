@@ -135,7 +135,6 @@
     const STORAGE_KEY = 'darecore_taller_state_v5_clean';
     const DEVICE_SESSION_KEY = 'darecore_taller_device_session_v1';
     const RTDB_STATE_PATH = 'darecore_taller/shared_state';
-    const CLEAN_START_FLAG_KEY = 'darecore_taller_clean_boot_done_v1';
 
     function formatNowStamp() {
       const now = new Date();
@@ -2774,7 +2773,7 @@
         await set(sharedRef, payload);
       } catch (err) {
         console.error('Error al guardar en Firebase Realtime Database:', err);
-        showToast('No se pudo sincronizar con Firebase. Revisa reglas de Realtime Database.', 'error');
+        showToast('No se pudo guardar en Firebase. Revisa las reglas de tu Realtime Database.', 'error');
       }
     };
 
@@ -2782,20 +2781,36 @@
       if (syncInitialized) return;
       syncInitialized = true;
 
-      onValue(sharedRef, (snapshot) => {
+      onValue(sharedRef, async (snapshot) => {
         try {
-          const cleanBootDone = localStorage.getItem(CLEAN_START_FLAG_KEY) === '1';
-          if (!snapshot.exists() || !cleanBootDone) {
-            // Subir estado limpio inicial (solo admin, sin prendas/órdenes de prueba)
-            localStorage.setItem(CLEAN_START_FLAG_KEY, '1');
-            set(sharedRef, getSharedStatePayload(DEFAULT_STATE));
+          if (!snapshot.exists()) {
+            // Solo si la nube está completamente vacía se siembra el estado inicial limpio una vez
+            const localSaved = localStorage.getItem(STORAGE_KEY);
+            let initialPayload = getSharedStatePayload(DEFAULT_STATE);
+            if (localSaved) {
+              try {
+                const parsedLocal = JSON.parse(localSaved);
+                const hasLocalData =
+                  (Array.isArray(parsedLocal.garments) && parsedLocal.garments.length > 0) ||
+                  (Array.isArray(parsedLocal.orders) && parsedLocal.orders.length > 0) ||
+                  (Array.isArray(parsedLocal.users) && parsedLocal.users.length > 1) ||
+                  (Array.isArray(parsedLocal.financeQueue) && parsedLocal.financeQueue.length > 0) ||
+                  (Array.isArray(parsedLocal.payoutHistory) && parsedLocal.payoutHistory.length > 0);
+                if (hasLocalData) {
+                  initialPayload = getSharedStatePayload(parsedLocal);
+                }
+              } catch (_) {}
+            }
+            await set(sharedRef, initialPayload);
             return;
           }
 
           const remoteData = snapshot.val() || {};
           isRemoteApplying = true;
 
-          state.users = Array.isArray(remoteData.users) && remoteData.users.length > 0 ? remoteData.users : DEFAULT_STATE.users;
+          state.users = Array.isArray(remoteData.users) && remoteData.users.length > 0
+            ? remoteData.users
+            : JSON.parse(JSON.stringify(DEFAULT_STATE.users));
           state.garments = Array.isArray(remoteData.garments) ? remoteData.garments : [];
           state.orders = Array.isArray(remoteData.orders) ? remoteData.orders : [];
           state.financeQueue = Array.isArray(remoteData.financeQueue) ? remoteData.financeQueue : [];
@@ -2810,6 +2825,7 @@
         }
       }, (error) => {
         console.error('Error en listener de Realtime Database:', error);
+        showToast('Error de conexión con Firebase Realtime Database.', 'error');
       });
     };
 
